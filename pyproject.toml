@@ -1,0 +1,13 @@
+[project]
+name = "eoh-arena-reference"
+version = "0.1.0"
+description = "Zero-trust economic selection protocol for open-source agents"
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0-or-later" }
+
+[tool.ruff]
+line-length = 100
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "strict"
