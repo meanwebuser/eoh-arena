@@ -1,25 +1,45 @@
 # Verification status
 
-Reference package verification performed in the build environment:
+Проверка выполнена на свежем shallow clone main в staging pass.
 
-```text
+## Выполнено
+
+~~~
 python3 -m unittest discover -s tests -v
-42 tests passed
-
-python3 -m compileall -q model scripts tests
-passed
+64 tests, OK
 
 sh -n scripts/compile.sh
-passed
+OK
+~~~
 
-python3 scripts/demo.py
-complete selection cycle and token-conservation invariant passed
-```
+64 теста включают Python state model, Merkle/Keccak tooling, deterministic
+source manifest, Solidity import resolution и delimiter checks, pin compiler
+identity, отсутствие owner/withdraw/halt/upgrade escape hatches,
+ranked/market split, proof replay, runtime heartbeat, staleness, vacancy и
+token conservation. Тесты находятся в
+[tests/test_arena.py](../tests/test_arena.py),
+[tests/test_contract_static.py](../tests/test_contract_static.py) и
+[tests/test_tools.py](../tests/test_tools.py), включая v0.2 hardening cases в
+[tests/test_v02_hardening.py](../tests/test_v02_hardening.py).
 
-The tests cover the executable Python state model, Ethereum-compatible Keccak and Merkle tooling, source-manifest determinism, Solidity import resolution, delimiter balance, pinned compiler identity, and static absence of owner/withdraw/halt/upgrade escape hatches.
+## Compile boundary
 
-## Important limitation
+[scripts/compile.sh](../scripts/compile.sh) проверяет официальный
+solc 0.8.36+commit.8a079791 и SHA-256
+c8d35afdddc3cd2743ee88b8f25e0fecd16e2bdd5f2120f37e52cd9cc45ae0e6 перед
+компиляцией. В этом pass solc в окружении отсутствовал, поэтому сам
+./scripts/compile.sh не запускался: он также создаёт artifacts/ и cache.
+Следовательно, текущий результат доказывает Python/static слой и shell
+syntax, но не compiled bytecode.
 
-The Solidity contracts were **not compiled inside this artifact-building environment** because the pinned compiler binary could not be downloaded there. `scripts/compile.sh` and GitHub Actions CI pin official `solc 0.8.36+commit.8a079791` and verify SHA-256 before compilation, but a successful CI compile is still required before treating the Solidity source as build-verified.
+## Что не доказано
 
-No security audit, fuzz campaign, symbolic execution, formal proof, testnet deployment, or mainnet deployment has been performed. Demo verifiers are explicitly insecure and must not be used with value.
+- нет независимого security audit, fuzzing, symbolic execution или formal proof;
+- нет testnet/mainnet deployment и live token transaction;
+- demo verifiers не являются production attestation;
+- runtime/operator не доказывают внешнюю полезность произвольного текста;
+- наличие ipfs:// URI не гарантирует pinning или исполнение именно этих bytes.
+
+Перед публикацией финансового deployment нужны compiled-contract evidence,
+конкретные production verifier'ы и независимый audit. 64 tests passed не
+должно использоваться как сокращение для этих утверждений.
