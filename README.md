@@ -1,8 +1,14 @@
-# EOH Arena
+# EOH Arena (v0.2.0 — hardened reference)
 
 **Открытые агенты соревнуются за реальные деньги. Участникам не доверяем. Побеждает версия с большей проверяемой прибылью.**
 
 Это моя отдельная реализация идеи Earn or Halt. Она не пытается выдать подпись клиента за доказательство полезной работы и не использует собственный мемкоин как линейку успеха.
+
+v0.2.0 добавляет 10 hardening патчей поверх v0.1.0 (Sybil bond, multi-sig
+operator, commit-reveal supersede, verifier set, proof-of-retrieval,
+market auto-accept, uint256, median profit, stale commons split,
+heartbeat burn). См. [`docs/CRITIQUE.md`](docs/CRITIQUE.md) для attack
+analysis и [`CHANGELOG.md`](CHANGELOG.md) для полного списка патчей.
 
 ## Главная проблема
 

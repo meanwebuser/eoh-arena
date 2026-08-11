@@ -8,13 +8,16 @@ from model.arena import Arena, ArenaError, MarketJobStatus, RankedJobStatus, Ver
 class ArenaTest(unittest.TestCase):
     def setUp(self) -> None:
         self.arena = Arena()
-        for account in ("founder", "buyer", "donor", "provider", "whale", "other"):
+        # v0.2.0: include operator accounts so they can pay the Sybil bond.
+        for account in ("founder", "buyer", "donor", "provider", "whale",
+                        "other", "root-op", "child-op"):
             self.arena.mint(account, 2_000_000)
         self.lineage, self.root = self.arena.create_lineage(
             operator="root-op",
             declaration=self.arena.declaration("root"),
             salt="root-salt",
             runtime_attested=True,
+            bond_funder="root-op",
         )
         self.child = self.arena.register_version(
             lineage_id=self.lineage,
@@ -23,6 +26,7 @@ class ArenaTest(unittest.TestCase):
             declaration=self.arena.declaration("child"),
             salt="child-salt",
             runtime_attested=True,
+            bond_funder="child-op",
         )
         self.arena.assert_invariants()
 
@@ -226,7 +230,8 @@ class ArenaTest(unittest.TestCase):
         self.arena.advance(11)
         self.arena.expire_ranked_job(job)
         self.assertEqual(self.arena.ranked_jobs[job].status, RankedJobStatus.EXPIRED)
-        self.assertEqual(self.arena.commons_available, 10_000)
+        # v0.2.0: commons holds the 10_000 reward + 2 registration bonds.
+        self.assertEqual(self.arena.commons_available, 10_000 + 2 * self.arena.VERSION_BOND)
         self.assertEqual(self.arena.commons_reserved, 0)
         self.arena.assert_invariants()
 
@@ -245,7 +250,8 @@ class ArenaTest(unittest.TestCase):
         transferred = self.arena.supersede(challenger_id=self.child, epoch=epoch)
         self.assertEqual(transferred, root_before)
         self.assertEqual(self.arena.vaults[self.root], 0)
-        self.assertEqual(self.arena.vaults[self.child], child_before + root_before)
+        # v0.2.0: heartbeat burn reduces child vault by 1 unit.
+        self.assertEqual(self.arena.vaults[self.child], child_before + root_before - self.arena.HEARTBEAT_BURN)
         self.assertEqual(self.arena.versions[self.root].status, VersionStatus.SUPERSEDED)
         self.assertEqual(self.arena.versions[self.root].successor, self.child)
         self.assertEqual(self.arena.versions[self.child].status, VersionStatus.ACTIVE)
@@ -288,7 +294,8 @@ class ArenaTest(unittest.TestCase):
         self.assertEqual(self.arena.profit(self.child, epoch), 0)
         absorbed = self.arena.absorb_surplus()
         self.assertEqual(absorbed, 123_000)
-        self.assertEqual(self.arena.commons_available, 123_000)
+        # v0.2.0: commons also holds 2 bonds (root + child) = 2000.
+        self.assertEqual(self.arena.commons_available, 123_000 + 2 * self.arena.VERSION_BOND)
         self.assertEqual(self.arena.wallets["whale"], before - 123_000)
         self.assertEqual(self.arena.profit(self.child, epoch), 0)
         self.arena.assert_invariants()
@@ -365,7 +372,8 @@ class ArenaTest(unittest.TestCase):
         moved = self.arena.eject_stale(self.root)
         self.assertEqual(moved, 123_456)
         self.assertEqual(self.arena.vaults[self.root], 0)
-        self.assertEqual(self.arena.commons_available, 123_456)
+        # v0.2.0: commons also holds 2 bonds (root + child) = 2000 added.
+        self.assertEqual(self.arena.commons_available, 123_456 + 2 * self.arena.VERSION_BOND)
         self.assertEqual(self.arena.versions[self.root].status, VersionStatus.STALE)
         self.assertIsNone(self.arena.active_version[self.lineage])
         self.arena.assert_invariants()
@@ -373,6 +381,7 @@ class ArenaTest(unittest.TestCase):
     def test_profitable_candidate_can_claim_vacancy(self) -> None:
         # Let the incumbent age, then create a fresh candidate in the current epoch.
         self.arena.advance(self.arena.STALE_AFTER + 1)
+        self.arena.mint("fresh-op", 2_000_000)  # v0.2.0: bond funding
         fresh = self.arena.register_version(
             lineage_id=self.lineage,
             parent_id=self.root,
@@ -503,6 +512,8 @@ class ArenaTest(unittest.TestCase):
 
     def test_nonpositive_ranked_profit_does_not_reset_stale_clock(self) -> None:
         self.arena.advance(self.arena.STALE_AFTER - 100)
+        # v0.2.0: heartbeat requires burn from vault; pre-fund root.
+        self.arena.donate("donor", self.root, 1_000)
         self.arena.heartbeat(
             operator="root-op",
             version_id=self.root,
@@ -524,6 +535,8 @@ class ArenaTest(unittest.TestCase):
 
     def test_positive_ranked_profit_resets_stale_clock(self) -> None:
         self.arena.advance(self.arena.STALE_AFTER - 100)
+        # v0.2.0: heartbeat requires burn from vault; pre-fund root.
+        self.arena.donate("donor", self.root, 1_000)
         self.arena.heartbeat(
             operator="root-op",
             version_id=self.root,
@@ -566,11 +579,13 @@ class ArenaTest(unittest.TestCase):
             )
 
     def test_parent_must_belong_to_lineage(self) -> None:
+        self.arena.mint("other-op", 2_000_000)  # v0.2.0: bond funding
         other_lineage, other_root = self.arena.create_lineage(
             operator="other-op",
             declaration=self.arena.declaration("other-root"),
             salt="other",
             runtime_attested=True,
+            bond_funder="other-op",
         )
         self.assertNotEqual(other_lineage, self.lineage)
         with self.assertRaisesRegex(ArenaError, "parent lineage mismatch"):
@@ -587,6 +602,7 @@ class ArenaTest(unittest.TestCase):
         versions = [self.root, self.child]
         operators = ["root-op", "child-op"]
         for index in range(4):
+            self.arena.mint(f"op-{index}", 2_000_000)  # v0.2.0: bond funding
             version = self.arena.register_version(
                 lineage_id=self.lineage,
                 parent_id=self.root,
@@ -594,6 +610,7 @@ class ArenaTest(unittest.TestCase):
                 declaration=self.arena.declaration(f"v-{index}"),
                 salt=f"salt-{index}",
                 runtime_attested=True,
+                bond_funder=f"op-{index}",
             )
             versions.append(version)
             operators.append(f"op-{index}")

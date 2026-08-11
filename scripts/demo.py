@@ -43,7 +43,8 @@ def settle(arena: Arena, *, name: str, reward: int, cost: int, version: str, ope
 
 def main() -> None:
     arena = Arena()
-    for account in ("commons-funder", "cost-funder", "whale", "provider"):
+    for account in ("commons-funder", "cost-funder", "whale", "provider",
+                    "incumbent-op", "challenger-op"):
         arena.mint(account, 10_000_000)
 
     lineage, incumbent = arena.create_lineage(
@@ -51,6 +52,7 @@ def main() -> None:
         declaration=arena.declaration("incumbent"),
         salt="root",
         runtime_attested=True,
+        bond_funder="incumbent-op",
     )
     challenger = arena.register_version(
         lineage_id=lineage,
@@ -59,6 +61,7 @@ def main() -> None:
         declaration=arena.declaration("challenger"),
         salt="fork",
         runtime_attested=True,
+        bond_funder="challenger-op",
     )
 
     # A whale can keep a version alive, but cannot purchase rank.
